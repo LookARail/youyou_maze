@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Procedural Maze Solver Game</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="controls">
+    <h2>Maze Controls</h2>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <label>Rows: <input id="rows" type="number" value="12" min="5" max="40"></label>
+      <label>Cols: <input id="cols" type="number" value="12" min="5" max="40"></label>
+    </div>
+    <label>Min path fraction (to avoid too-easy):
+      <input id="minFraction" type="number" value="0.12" step="0.01" min="0" max="1">
+    </label>
+    <label><input id="fogToggle" type="checkbox"> Enable fog-of-war (visibility radius)</label>
+    <label>Visibility radius: <input id="visRadius" type="number" value="3" min="1" max="10"></label>
+    <div style="display:flex;gap:8px;">
+      <button id="regen">Regenerate Maze</button>
+      <button id="solve" class="secondary">Show Solution</button>
+      <button id="reset" class="secondary" style="display:none">New Start/Exit</button>
+    </div>
+    <div class="status" id="status">Use arrow keys to move. Player starts at a random cell; exit is another random cell.</div>
+    <hr>
+    <div style="font-size:13px;color:#666">Notes: Maze is generated with a depth-first recursive backtracker (perfect maze) and validated with BFS. If it is too short the generator automatically retries. Ready for additional features (enemies, collectibles, fog, etc.).</div>
+  </div>
+
+  <div id="main-content">
+    <div class="game">
+      <div id="grid" class="grid" tabindex="0" aria-label="Maze grid"></div>
+    </div>
+  </div>
+
+  <!-- Topbar / Main menu for mobile: contains a visible Regenerate button moved here for quick access -->
+  <div id="topbar" style="position:fixed;left:12px;top:12px;right:12px;display:none;justify-content:space-between;align-items:center;gap:8px;z-index:60">
+    <div style="background:rgba(255,255,255,0.9);padding:6px 10px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,0.06)">
+      <button id="regenTop" style="padding:6px 10px;border-radius:8px;border:0;background:#111;color:#fff;">Regenerate Maze</button>
+    </div>
+  </div>
+
+  <!-- Mobile joystick area: will be laid out differently for portrait/landscape/desktop -->
+  <div id="mobileControls" style="position:fixed;left:0;right:0;bottom:0;height:30vh;z-index:70;display:none;align-items:center;justify-content:center;pointer-events:auto">
+    <div id="mobileInner" style="width:100%;max-width:1100px;display:flex;align-items:stretch;justify-content:space-between;padding:14px;box-sizing:border-box">
+      <!-- left: empty (for now) -->
+      <div id="mobileLeft" style="flex:1"></div>
+      <!-- center: joystick area -->
+      <div id="mobileCenter" style="flex:1;display:flex;align-items:center;justify-content:center">
+        <div id="joystick" style="width:140px;height:140px;border-radius:12px;background:rgba(255,255,255,0.92);box-shadow:0 8px 22px rgba(0,0,0,0.08);display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);gap:8px;padding:12px;">
+      <!-- grid positions: use data-dir on central buttons -->
+      <div></div>
+      <button class="joy-btn" data-dir="up" style="border-radius:8px;border:0;background:#eee">▲</button>
+      <div></div>
+      <button class="joy-btn" data-dir="left" style="border-radius:8px;border:0;background:#eee">◀</button>
+      <div style="background:transparent"></div>
+      <button class="joy-btn" data-dir="right" style="border-radius:8px;border:0;background:#eee">▶</button>
+      <div></div>
+      <button class="joy-btn" data-dir="down" style="border-radius:8px;border:0;background:#eee">▼</button>
+      <div></div>
+    </div>
+      </div>
+      <!-- right: vertical stack of action buttons -->
+      <div id="mobileRight" style="flex:0 0 140px;display:flex;flex-direction:column;align-items:flex-end;justify-content:flex-end;gap:10px">
+        <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end">
+          <button id="regenMobile" style="padding:10px 12px;border-radius:10px;border:0;background:#111;color:#fff;box-shadow:0 6px 18px rgba(0,0,0,0.06)">Regenerate</button>
+          <button id="fogMobile" style="padding:10px 12px;border-radius:10px;border:0;background:#fff;box-shadow:0 6px 18px rgba(0,0,0,0.06)">Fog: Off</button>
+          <button id="settingsToggle" style="padding:10px 12px;border-radius:10px;border:0;background:#fff;box-shadow:0 6px 18px rgba(0,0,0,0.06)">Settings</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* === Maze game: procedural generation, guaranteed solvable, customizable size === */
+
+    // Configuration (defaults)
+    let rows = 12, cols = 12;
+    const gridEl = document.getElementById('grid');
+    const rowsInput = document.getElementById('rows');
+    const colsInput = document.getElementById('cols');
+    const minFractionInput = document.getElementById('minFraction');
+    const regenBtn = document.getElementById('regen');
+    const solveBtn = document.getElementById('solve');
+    const resetBtn = document.getElementById('reset');
+    const statusEl = document.getElementById('status');
+    const fogToggle = document.getElementById('fogToggle');
+    const visRadiusInput = document.getElementById('visRadius');
+
+    let minPathFraction = parseFloat(minFractionInput.value);
+    let visibilityRadius = parseInt(visRadiusInput.value,10);
+
+    // Maze data structures
+    function makeCell(r,c){
+      return {r,c, walls:{top:true,right:true,bottom:true,left:true}, visited:false};
+    }
+
+    let cells = []; // 2D array [r][c]
+    let start = null; let exitPos = null;
+    let player = null; // {r,c}
+
+    function initCells(r,c){
+      cells = new Array(r);
+      for(let i=0;i<r;i++){
+        cells[i] = new Array(c);
+        for(let j=0;j<c;j++) cells[i][j]=makeCell(i,j);
+      }
+    }
+
+    // DFS recursive backtracker
+    function generateMaze(r,c){
+      initCells(r,c);
+      const stack=[];
+      // start at random cell
+      const startR = Math.floor(Math.random()*r);
+      const startC = Math.floor(Math.random()*c);
+      let cur = cells[startR][startC];
+      cur.visited=true; stack.push(cur);
+      while(stack.length){
+        cur = stack[stack.length-1];
+        const neighbors = [];
+        const {r:cr,c:cc} = cur;
+        // top
+        if(cr>0 && !cells[cr-1][cc].visited) neighbors.push({cell:cells[cr-1][cc],dir:'top'});
+        if(cc<c-1 && !cells[cr][cc+1].visited) neighbors.push({cell:cells[cr][cc+1],dir:'right'});
+        if(cr<r-1 && !cells[cr+1][cc].visited) neighbors.push({cell:cells[cr+1][cc],dir:'bottom'});
+        if(cc>0 && !cells[cr][cc-1].visited) neighbors.push({cell:cells[cr][cc-1],dir:'left'});
+        if(neighbors.length===0){
+          stack.pop();
+        } else {
+          const pick = neighbors[Math.floor(Math.random()*neighbors.length)];
+          const next = pick.cell;
+          // remove walls between cur and next
+          if(pick.dir==='top'){ cur.walls.top=false; next.walls.bottom=false; }
+          if(pick.dir==='right'){ cur.walls.right=false; next.walls.left=false; }
+          if(pick.dir==='bottom'){ cur.walls.bottom=false; next.walls.top=false; }
+          if(pick.dir==='left'){ cur.walls.left=false; next.walls.right=false; }
+          next.visited = true;
+          stack.push(next);
+        }
+      }
+      // clear visited marks for reuse
+      for(let i=0;i<r;i++) for(let j=0;j<c;j++) cells[i][j].visited=false;
+    }
+
+    // BFS to find shortest path between two cells, returns path array of {r,c}
+    function findPath(startPos, endPos){
+      const q = [];
+      const R = cells.length, C = cells[0].length;
+      const seen = Array.from({length:R},()=>Array(C).fill(false));
+      const parent = Array.from({length:R},()=>Array(C).fill(null));
+      q.push(startPos); seen[startPos.r][startPos.c]=true;
+      while(q.length){
+        const cur = q.shift();
+        if(cur.r===endPos.r && cur.c===endPos.c) break;
+        const cell = cells[cur.r][cur.c];
+        // try each direction if no wall
+        if(!cell.walls.top && !seen[cur.r-1][cur.c]){ seen[cur.r-1][cur.c]=true; parent[cur.r-1][cur.c]=cur; q.push({r:cur.r-1,c:cur.c}); }
+        if(!cell.walls.right && !seen[cur.r][cur.c+1]){ seen[cur.r][cur.c+1]=true; parent[cur.r][cur.c+1]=cur; q.push({r:cur.r,c:cur.c+1}); }
+        if(!cell.walls.bottom && !seen[cur.r+1][cur.c]){ seen[cur.r+1][cur.c]=true; parent[cur.r+1][cur.c]=cur; q.push({r:cur.r+1,c:cur.c}); }
+        if(!cell.walls.left && !seen[cur.r][cur.c-1]){ seen[cur.r][cur.c-1]=true; parent[cur.r][cur.c-1]=cur; q.push({r:cur.r,c:cur.c-1}); }
+      }
+      // if parent for end is null and it's not start, means no path
+      if(!parent[endPos.r][endPos.c] && !(startPos.r===endPos.r && startPos.c===endPos.c)) return null;
+      const path = [];
+      let cur = endPos;
+      while(cur){ path.push(cur); cur = parent[cur.r][cur.c]; }
+      return path.reverse();
+    }
+
+    function randCell(){
+      return {r: Math.floor(Math.random()*cells.length), c: Math.floor(Math.random()*cells[0].length)};
+    }
+
+    // Ensure maze is not "too easy": require shortest-path length >= minFraction * totalCells
+    function generateVerifiedMaze(r,c){
+      let attempts=0; const maxAttempts=50;
+      const total = r*c;
+      const minLen = Math.max(3, Math.floor(total * minPathFraction));
+      while(attempts<maxAttempts){
+        generateMaze(r,c);
+        // pick start/exit and test path length
+        const a = randCell(); const b = randCell();
+        if(a.r===b.r && a.c===b.c) { attempts++; continue; }
+        const path = findPath(a,b);
+        if(path && path.length>=minLen){ start=a; exitPos=b; return {start:a,exit:b,path}; }
+        attempts++;
+      }
+      // fallback: accept last generated maze but compute path from random points
+      const a = randCell(); const b = randCell(); start=a; exitPos=b; const p = findPath(a,b);
+      return {start:a,exit:b,path:p};
+    }
+
+    // Rendering helpers
+    function renderGrid(){
+      gridEl.innerHTML='';
+      const R = cells.length, C = cells[0].length;
+      gridEl.style.gridTemplateColumns = `repeat(${C}, var(--cell-size))`;
+      for(let i=0;i<R;i++){
+        for(let j=0;j<C;j++){
+          const cell = cells[i][j];
+          const div = document.createElement('div');
+          div.className='cell';
+          if(cell.walls.top) div.classList.add('wall-top');
+          if(cell.walls.right) div.classList.add('wall-right');
+          if(cell.walls.bottom) div.classList.add('wall-bottom');
+          if(cell.walls.left) div.classList.add('wall-left');
+          div.dataset.r = i; div.dataset.c = j;
+          gridEl.appendChild(div);
+        }
+      }
+      updateEntities();
+    }
+
+    // place player and exit DOM elements
+    function updateEntities(){
+      // clear any existing overlays in cells
+      const all = gridEl.querySelectorAll('.cell');
+      all.forEach(n=>{ n.innerHTML=''; n.classList.remove('solution'); n.classList.remove('hidden-cell'); if(!fogToggle.checked) n.classList.remove('fog'); });
+      const startIdx = start.r * cells[0].length + start.c;
+      const exitIdx = exitPos.r * cells[0].length + exitPos.c;
+      const startCell = gridEl.children[startIdx];
+      const exitCell = gridEl.children[exitIdx];
+      // exit
+      const exitEl = document.createElement('div'); exitEl.className='exit'; exitEl.textContent='EXIT';
+      exitCell.appendChild(exitEl);
+      // player
+      const playerEl = document.createElement('div'); playerEl.className='player'; playerEl.textContent='P';
+      gridEl.children[player.r*cells[0].length + player.c].appendChild(playerEl);
+      updateVisibility();
+    }
+
+    function updateVisibility(){
+      const R = cells.length, C = cells[0].length;
+      const radius = parseInt(visRadiusInput.value,10) || 3;
+      // By default hide everything when fog is enabled
+      for(let i=0;i<R;i++) for(let j=0;j<C;j++){
+        const idx = i*C + j; const el = gridEl.children[idx];
+        if(fogToggle.checked){ el.classList.add('hidden-cell'); el.classList.add('fog'); }
+        else { el.classList.remove('hidden-cell'); el.classList.remove('fog'); }
+      }
+
+      if(!fogToggle.checked) return;
+
+      // BFS flood from player, respecting walls, limited by radius (Manhattan distance as depth)
+      const q = [];
+      const seen = Array.from({length:R},()=>Array(C).fill(false));
+      q.push({r:player.r,c:player.c,dist:0}); seen[player.r][player.c]=true;
+      while(q.length){
+        const cur = q.shift();
+        const idx = cur.r*C + cur.c; const el = gridEl.children[idx];
+        // mark visible
+        el.classList.remove('hidden-cell'); el.classList.remove('fog');
+        if(cur.dist>=radius) continue;
+        const cell = cells[cur.r][cur.c];
+        // neighbors: only traverse if there's no wall between cur and neighbor
+        // top
+        if(!cell.walls.top){ const nr=cur.r-1, nc=cur.c; if(nr>=0 && !seen[nr][nc]){ seen[nr][nc]=true; q.push({r:nr,c:nc,dist:cur.dist+1}); } }
+        // right
+        if(!cell.walls.right){ const nr=cur.r, nc=cur.c+1; if(nc<C && !seen[nr][nc]){ seen[nr][nc]=true; q.push({r:nr,c:nc,dist:cur.dist+1}); } }
+        // bottom
+        if(!cell.walls.bottom){ const nr=cur.r+1, nc=cur.c; if(nr<R && !seen[nr][nc]){ seen[nr][nc]=true; q.push({r:nr,c:nc,dist:cur.dist+1}); } }
+        // left
+        if(!cell.walls.left){ const nr=cur.r, nc=cur.c-1; if(nc>=0 && !seen[nr][nc]){ seen[nr][nc]=true; q.push({r:nr,c:nc,dist:cur.dist+1}); } }
+      }
+    }
+
+    // movement - obey walls
+    function tryMove(dir){
+      const cell = cells[player.r][player.c];
+      if(dir==='up'){ if(cell.walls.top) return false; player.r--; }
+      if(dir==='right'){ if(cell.walls.right) return false; player.c++; }
+      if(dir==='down'){ if(cell.walls.bottom) return false; player.r++; }
+      if(dir==='left'){ if(cell.walls.left) return false; player.c--; }
+      updatePlayerDOM();
+      return true;
+    }
+    function updatePlayerDOM(){
+      // remove player el from previous cell
+      gridEl.querySelectorAll('.player').forEach(n=>n.remove());
+      const idx = player.r*cells[0].length + player.c;
+      const el = document.createElement('div'); el.className='player'; el.textContent='P';
+      gridEl.children[idx].appendChild(el);
+      updateVisibility();
+      checkWin();
+    }
+
+    function checkWin(){
+      if(player.r===exitPos.r && player.c===exitPos.c){ statusEl.textContent = 'You escaped! (press Regenerate to play again)'; }
+    }
+
+    // keyboard controls
+    window.addEventListener('keydown', (e)=>{
+      const k = e.key;
+      if(k==='ArrowUp' || k==='w' || k==='W'){ e.preventDefault(); tryMove('up'); }
+      if(k==='ArrowRight' || k==='d' || k==='D'){ e.preventDefault(); tryMove('right'); }
+      if(k==='ArrowDown' || k==='s' || k==='S'){ e.preventDefault(); tryMove('down'); }
+      if(k==='ArrowLeft' || k==='a' || k==='A'){ e.preventDefault(); tryMove('left'); }
+    });
+
+    // UI actions
+    regenBtn.addEventListener('click', ()=>{
+      rows = Math.max(5, Math.min(40, parseInt(rowsInput.value) || 12));
+      cols = Math.max(5, Math.min(40, parseInt(colsInput.value) || 12));
+      minPathFraction = parseFloat(minFractionInput.value) || 0.12;
+      visibilityRadius = parseInt(visRadiusInput.value,10) || 3;
+      const result = generateVerifiedMaze(rows,cols);
+      start = result.start; exitPos = result.exit;
+      player = {r:start.r,c:start.c};
+      renderGrid();
+      statusEl.textContent = `Maze generated ${rows}x${cols}. Shortest path length: ${result.path?result.path.length:'unknown'}`;
+      // focus grid to catch keystrokes on mobile
+      setTimeout(()=>gridEl.focus(),40);
+    });
+
+    resetBtn.addEventListener('click', ()=>{
+      // pick new random start/exit (preserve maze layout) ensuring min length
+      const total = rows*cols; const minLen = Math.max(3, Math.floor(total * minPathFraction));
+      let attempts = 0; while(attempts<100){
+        const a = randCell(); const b = randCell(); if(a.r===b.r && a.c===b.c){ attempts++; continue; }
+        const path = findPath(a,b); if(path && path.length>=minLen){ start=a; exitPos=b; player={r:start.r,c:start.c}; renderGrid(); statusEl.textContent = `New start/exit chosen. Path length ${path.length}`; return; }
+        attempts++; }
+      statusEl.textContent = 'Could not find a sufficiently long pair for start/exit — try regenerating.';
+    });
+
+    // Wire topbar regenerate button to same action
+    const regenTopBtn = document.getElementById('regenTop');
+    regenTopBtn.addEventListener('click', ()=> regenBtn.click());
+
+    // Settings toggle: show/hide controls panel on mobile
+    const settingsToggle = document.getElementById('settingsToggle');
+    settingsToggle && settingsToggle.addEventListener('click', ()=>{
+      const panel = document.querySelector('.controls');
+      if(!panel) return;
+      const isMobile = window.matchMedia('(max-width:880px)').matches;
+      // On mobile, toggle the fixed controls panel
+      if(isMobile){
+        if(panel.style.display==='none' || getComputedStyle(panel).display==='none'){
+          panel.style.display='block';
+        } else {
+          panel.style.display='none';
+        }
+      } else {
+        // On desktop toggle visibility inline
+        if(panel.style.display==='none') panel.style.display='block'; else panel.style.display='none';
+      }
+    });
+
+    // Joystick wiring: buttons trigger tryMove
+    const joyBtns = document.querySelectorAll('.joy-btn');
+    joyBtns.forEach(b=>{
+      const dir = b.dataset.dir;
+      // click/tap/touch: move only once per event
+      b.addEventListener('click', (e)=>{ e.preventDefault(); tryMove(dir); });
+      b.addEventListener('touchstart', (e)=>{ e.preventDefault(); tryMove(dir); });
+      // Remove pointerdown repeat for single-move-per-click
+    });
+
+    // Swipe support on grid: detect simple swipes and move player
+    (function addSwipe(){
+      let startX=0,startY=0,tracking=false;
+      gridEl.addEventListener('touchstart',(e)=>{ if(e.touches && e.touches.length===1){ tracking=true; startX=e.touches[0].clientX; startY=e.touches[0].clientY; } },{passive:true});
+      gridEl.addEventListener('touchmove',(e)=>{ /* prevent page scroll when dragging on grid */ if(tracking) e.preventDefault(); },{passive:false});
+      gridEl.addEventListener('touchend',(e)=>{
+        if(!tracking) return; tracking=false;
+        const touch = e.changedTouches[0]; const dx = touch.clientX - startX; const dy = touch.clientY - startY;
+        const absX = Math.abs(dx), absY = Math.abs(dy);
+        if(Math.max(absX,absY) < 20) return; // ignore tiny gestures
+        if(absX>absY){ if(dx>0) tryMove('right'); else tryMove('left'); }
+        else { if(dy>0) tryMove('down'); else tryMove('up'); }
+      });
+    })();
+
+    // Auto-show mobileControls when screen is small and hide desktop controls
+    function updateLayoutForSize(){
+      const mobile = window.matchMedia('(max-width:880px)').matches;
+      const panel = document.querySelector('.controls');
+      const mobileControls = document.getElementById('mobileControls');
+      if(mobile){
+        mobileControls.style.display='flex';
+        // hide desktop controls by default; user can open via settings toggle
+        panel.style.display='none';
+      } else {
+        mobileControls.style.display='flex';
+        panel.style.display='block';
+      }
+    }
+    window.addEventListener('resize', updateLayoutForSize);
+    updateLayoutForSize();
+
+    // Wire mobile regen and fog buttons
+    const regenMobile = document.getElementById('regenMobile');
+    regenMobile && regenMobile.addEventListener('click', ()=> regenBtn.click());
+    const fogMobile = document.getElementById('fogMobile');
+    if(fogMobile){
+      function updateFogLabel(){ fogMobile.textContent = fogToggle.checked? 'Fog: On' : 'Fog: Off'; }
+      fogMobile.addEventListener('click', ()=>{ fogToggle.checked = !fogToggle.checked; updateVisibility(); updateFogLabel(); });
+      // initialize label
+      updateFogLabel();
+    }
+
+    fogToggle.addEventListener('change', ()=>{ updateVisibility(); });
+    visRadiusInput.addEventListener('change', ()=>{ updateVisibility(); });
+
+    // Show solution animation
+    solveBtn.addEventListener('click', async ()=>{
+      const p = findPath({r:player.r,c:player.c}, exitPos);
+      if(!p){ statusEl.textContent='No path from player to exit (should not happen).'; return; }
+      statusEl.textContent = `Showing solution (length ${p.length}).`;
+      // highlight cells one by one
+      for(let i=0;i<p.length;i++){
+        const idx = p[i].r * cells[0].length + p[i].c;
+        gridEl.children[idx].classList.add('solution');
+        await new Promise(res=>setTimeout(res,40));
+      }
+      // remove highlight after a moment
+      setTimeout(()=>{ for(let i=0;i<p.length;i++){ const idx = p[i].r * cells[0].length + p[i].c; gridEl.children[idx].classList.remove('solution'); } statusEl.textContent='Solution hidden.'; }, 1200);
+    });
+
+    // initialize first maze
+    (function init(){
+      rows = parseInt(rowsInput.value,10) || 12; cols = parseInt(colsInput.value,10) || 12; minPathFraction = parseFloat(minFractionInput.value) || 0.12;
+      const result = generateVerifiedMaze(rows,cols);
+      start = result.start; exitPos = result.exit; player = {r:start.r,c:start.c};
+      renderGrid();
+      statusEl.textContent = `Maze ${rows}x${cols} generated. Shortest path: ${result.path?result.path.length:'unknown'}. Use arrow keys to move.`;
+      gridEl.focus();
+    })();
+
+    // Expose some helpers for future features
+    window._MAZE = {
+      getCells: ()=>cells,
+      getPlayer: ()=>player,
+      getExit: ()=>exitPos,
+      regenerate: ()=>regenBtn.click(),
+      toggleFog: ()=>{ fogToggle.checked=!fogToggle.checked; updateVisibility(); }
+    };
+  </script>
+</body>
+</html>

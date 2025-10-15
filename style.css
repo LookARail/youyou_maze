@@ -1,0 +1,111 @@
+:root{
+  --cell-size: 44px; /* change to scale the visuals */
+  --player-color: #ff6b6b;
+  --exit-color: #4caf50;
+  --path-color: rgba(70,130,180,0.15);
+  --wall-color: #222;
+  --floor-color: #f7f7f7;
+}
+body{
+  font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial;
+  min-height:100vh;box-sizing:border-box;
+  background:#fafafa;color:#111;
+  margin:0;
+}
+
+#main-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100vw;
+  min-height: 100vh;
+}
+.controls{
+  width:320px;
+  display:flex;flex-direction:column;gap:10px;
+  background:#fff;padding:14px;border-radius:12px;box-shadow:0 6px 20px rgba(20,20,30,0.06);
+}
+.controls h2{margin:0 0 6px 0;font-size:16px}
+.controls label{font-size:13px; display:flex;align-items:center;gap:8px}
+.controls input[type=number]{width:80px;padding:6px;border-radius:6px;border:1px solid #ddd}
+.controls button{padding:8px 10px;border-radius:8px;border:0;background:#111;color:#fff;cursor:pointer}
+.controls button.secondary{background:#f0f0f0;color:#111}
+.status{font-size:13px;margin-top:8px;color:#444}
+
+.game{
+  background:linear-gradient(#fff,#fff);padding:12px;border-radius:12px;box-shadow:0 10px 35px rgba(20,20,30,0.06);
+  margin-left:auto;
+  margin-right:auto;
+  display:block;
+}
+
+.grid{
+  display:grid;
+  grid-template-columns: repeat(12, var(--cell-size));
+  grid-auto-rows: var(--cell-size);
+  gap:0; /* walls are drawn by borders on cells */
+  background:transparent;
+  position:relative;
+  touch-action: none;
+}
+
+.cell{
+  width:var(--cell-size);height:var(--cell-size);
+  box-sizing:border-box; background:var(--floor-color);position:relative;
+  display:flex;align-items:center;justify-content:center;font-size:12px;color:#555
+}
+/* wall styles: draw borders where the grid has walls */
+.wall-top{border-top:4px solid var(--wall-color)}
+.wall-right{border-right:4px solid var(--wall-color)}
+.wall-bottom{border-bottom:4px solid var(--wall-color)}
+.wall-left{border-left:4px solid var(--wall-color)}
+
+.player{
+  width:60%;height:60%;border-radius:50%;background:var(--player-color);box-shadow:0 3px 8px rgba(0,0,0,0.15);
+  display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600;font-size:12px
+}
+.exit{
+  width:58%;height:58%;border-radius:8px;background:var(--exit-color);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:12px
+}
+
+.fog{
+  filter:grayscale(80%) blur(0.8px) brightness(0.6);
+}
+/* fully hide cells outside visibility (no walls, borders or contents shown) */
+.hidden-cell{opacity:0; visibility:hidden; pointer-events:none}
+
+.solution{background:var(--path-color);transition:background .2s}
+
+/* mobile-friendly touches */
+@media (max-width:880px){
+  /* Portrait/mobile: stack maze and controls, no overlap */
+  #main-content {
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    width: 100vw;
+    min-height: 100vh;
+    display: flex;
+  }
+  .game{order:1;height:70vh;width:100vw;max-width:100vw;box-sizing:border-box;padding:12px;margin-left:auto;margin-right:auto;}
+  #mobileControls{order:2;display:flex !important;position:relative;left:0;right:0;bottom:0;width:100vw;min-height:30vh;max-width:100vw;justify-content:center;align-items:center;}
+  #mobileInner{margin-left:auto;margin-right:auto;justify-content:center !important;display:flex;align-items:center;width:100%;max-width:1100px;}
+  #mobileCenter{display:flex;justify-content:center !important;align-items:center;flex:1;}
+  #topbar{display:flex;left:8px;right:8px;}
+  .controls{display:none !important;}
+}
+@media (max-width:880px) and (orientation:landscape){
+  body{flex-direction:row;align-items:stretch;height:100vh;min-height:100vh;}
+  .game{width:70vw;height:100vh;order:1;max-width:70vw;}
+  #mobileControls{display:flex !important;position:relative;right:0;top:0;bottom:0;height:100vh;width:30vw;min-width:200px;max-width:30vw;align-items:center;justify-content:center;}
+  #topbar{display:flex;left:8px;right:8px;}
+  .controls{display:none !important;}
+}
+@media (min-width:881px){
+  body{flex-direction:column;align-items:stretch;height:100vh;min-height:100vh;}
+  .game{order:1;height:70vh;width:100vw;max-width:100vw;box-sizing:border-box;padding:12px;}
+  #mobileControls{order:2;display:flex !important;position:relative;left:0;right:0;bottom:0;width:100vw;min-height:30vh;max-width:100vw;}
+  #topbar{display:none !important;}
+  .controls{display:none !important;}
+}
