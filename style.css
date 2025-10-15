@@ -2,15 +2,21 @@
   --cell-size: 44px; /* change to scale the visuals */
   --player-color: #ff6b6b;
   --exit-color: #4caf50;
-  --path-color: rgba(70,130,180,0.15);
+  --path-color: rgba(215, 95, 47, 0.847);
   --wall-color: #222;
   --floor-color: #f7f7f7;
 }
+html, body{
+  height:100%;
+  overscroll-behavior: none; /* avoid touch bounce / scroll chaining */
+}
+
 body{
   font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial;
   min-height:100vh;box-sizing:border-box;
   background:#fafafa;color:#111;
   margin:0;
+  overflow: hidden; /* disable page scrolling */
 }
 
 #main-content {

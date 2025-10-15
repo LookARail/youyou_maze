@@ -463,6 +463,9 @@
       gridEl.focus();
     })();
 
+    // Ensure mobile fog button label reflects default state after init
+    if(typeof updateFogLabel === 'function' && fogMobile) updateFogLabel();
+
     // Expose some helpers for future features
     window._MAZE = {
       getCells: ()=>cells,
