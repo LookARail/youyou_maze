@@ -21,7 +21,6 @@
       <label class="controls-row">Visibility radius: <input id="visRadius" type="number" value="3" min="1" max="10"></label>
       <div class="controls-row">
         <button id="regen">Regenerate Maze</button>
-        <button id="solve" class="secondary">Show Solution</button>
         <button id="reset" class="secondary" style="display:none">New Start/Exit</button>
       </div>
       <div class="status" id="status">Use arrow keys to move. Player starts at a random cell; exit is another random cell.</div>
@@ -33,6 +32,7 @@
   <div id="main-content">
     <div class="game">
       <div id="grid" class="grid" tabindex="0" aria-label="Maze grid"></div>
+      
     </div>
   </div>
 
@@ -67,6 +67,7 @@
       <div id="mobileRight" style="position:absolute;right:14px;display:flex;flex-direction:column;align-items:flex-end;justify-content:flex-end;gap:10px;">
         <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end">
           <button id="regenMobile" style="padding:10px 12px;border-radius:10px;border:0;background:#111;color:#fff;box-shadow:0 6px 18px rgba(0,0,0,0.06)">Regenerate</button>
+          <button id="solveMobile" style="padding:10px 12px;border-radius:10px;border:0;background:#fff;box-shadow:0 6px 18px rgba(0,0,0,0.06)">Show Solution</button>
           <button id="fogMobile" style="padding:10px 12px;border-radius:10px;border:0;background:#fff;box-shadow:0 6px 18px rgba(0,0,0,0.06)">Fog: On</button>
           <button id="settingsToggle" style="padding:10px 12px;border-radius:10px;border:0;background:#fff;box-shadow:0 6px 18px rgba(0,0,0,0.06)">Settings</button>
         </div>

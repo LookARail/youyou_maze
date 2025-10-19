@@ -7,7 +7,8 @@
   const mobileControls = document.getElementById('mobileControls');
     const minFractionInput = document.getElementById('minFraction');
     const regenBtn = document.getElementById('regen');
-    const solveBtn = document.getElementById('solve');
+    const solveBtn = document.getElementById('solve') || document.getElementById('solveMobile');
+    const solveMobileBtn = document.getElementById('solveMobile');
     const resetBtn = document.getElementById('reset');
     const statusEl = document.getElementById('status');
     const fogToggle = document.getElementById('fogToggle');
@@ -147,12 +148,16 @@
       const exitIdx = exitPos.r * cells[0].length + exitPos.c;
       const startCell = gridEl.children[startIdx];
       const exitCell = gridEl.children[exitIdx];
-      // exit
-      const exitEl = document.createElement('div'); exitEl.className='exit'; exitEl.textContent='EXIT';
-      exitCell.appendChild(exitEl);
-      // player
-      const playerEl = document.createElement('div'); playerEl.className='player'; playerEl.textContent='P';
-      gridEl.children[player.r*cells[0].length + player.c].appendChild(playerEl);
+  // exit (use provided image)
+  const exitEl = document.createElement('div'); exitEl.className='exit';
+  const exitImg = document.createElement('img'); exitImg.className = 'exit-img'; exitImg.src = 'exit.png'; exitImg.alt = 'Exit';
+  exitEl.appendChild(exitImg);
+  exitCell.appendChild(exitEl);
+  // player (use provided image)
+  const playerEl = document.createElement('div'); playerEl.className='player';
+  const playerImg = document.createElement('img'); playerImg.className = 'player-img'; playerImg.src = 'player.png'; playerImg.alt = 'Player';
+  playerEl.appendChild(playerImg);
+  gridEl.children[player.r*cells[0].length + player.c].appendChild(playerEl);
       updateVisibility();
     }
 
@@ -205,14 +210,20 @@
       // remove player el from previous cell
       gridEl.querySelectorAll('.player').forEach(n=>n.remove());
       const idx = player.r*cells[0].length + player.c;
-      const el = document.createElement('div'); el.className='player'; el.textContent='P';
+      const el = document.createElement('div'); el.className='player';
+      const playerImg = document.createElement('img'); playerImg.className = 'player-img'; playerImg.src = 'player.png'; playerImg.alt = 'Player';
+      el.appendChild(playerImg);
       gridEl.children[idx].appendChild(el);
       updateVisibility();
       checkWin();
     }
 
     function checkWin(){
-      if(player.r===exitPos.r && player.c===exitPos.c){ statusEl.textContent = 'You escaped! (press Regenerate to play again)'; }
+      if(player.r===exitPos.r && player.c===exitPos.c){ 
+        console.log('You Win!');
+        statusEl.textContent = 'You Win!';
+        try{ showWinCanvas(); }catch(e){}
+      }
     }
 
     // keyboard controls
@@ -304,6 +315,8 @@
       statusEl.textContent = `Maze generated ${rows}x${cols}. Shortest path length: ${result.path?result.path.length:'unknown'}`;
       // focus grid to catch keystrokes on mobile
       setTimeout(()=>gridEl.focus(),40);
+      // clear any active win overlay
+      try{ hideWinCanvas(); }catch(e){}
     });
 
   resetBtn.addEventListener('click', ()=>{
@@ -434,19 +447,27 @@
     fogToggle.addEventListener('change', ()=>{ updateVisibility(); });
     visRadiusInput.addEventListener('change', ()=>{ updateVisibility(); });
 
-    // Show solution animation
-    solveBtn.addEventListener('click', async ()=>{
+    // Show/Hide persistent solution
+    let solutionVisible = false;
+  function setSolveLabels(text){ if(solveBtn) solveBtn.textContent = text; if(solveMobileBtn) solveMobileBtn.textContent = text; }
+
+  function showSolution(){
       const p = findPath({r:player.r,c:player.c}, exitPos);
       if(!p){ statusEl.textContent='No path from player to exit (should not happen).'; return; }
-      statusEl.textContent = `Showing solution (length ${p.length}).`;
-      // highlight cells one by one
-      for(let i=0;i<p.length;i++){
-        const idx = p[i].r * cells[0].length + p[i].c;
-        gridEl.children[idx].classList.add('solution');
-        await new Promise(res=>setTimeout(res,40));
-      }
-      // remove highlight after a moment
-      setTimeout(()=>{ for(let i=0;i<p.length;i++){ const idx = p[i].r * cells[0].length + p[i].c; gridEl.children[idx].classList.remove('solution'); } statusEl.textContent='Solution hidden.'; }, 1200);
+      statusEl.textContent = `Solution visible (length ${p.length}).`;
+      for(let i=0;i<p.length;i++){ const idx = p[i].r * cells[0].length + p[i].c; gridEl.children[idx].classList.add('solution'); }
+      solutionVisible = true;
+  setSolveLabels('Hide Solution');
+    }
+    function hideSolution(){
+      // remove any solution highlights
+      gridEl.querySelectorAll('.solution').forEach(n=>n.classList.remove('solution'));
+      solutionVisible = false;
+  setSolveLabels('Show Solution');
+      statusEl.textContent = '';
+    }
+    solveBtn.addEventListener('click', ()=>{
+      if(!solutionVisible) showSolution(); else hideSolution();
     });
 
     // initialize first maze
@@ -462,6 +483,55 @@
       statusEl.textContent = `Maze ${rows}x${cols} generated. Shortest path: ${result.path?result.path.length:'unknown'}. Use arrow keys to move.`;
       gridEl.focus();
     })();
+
+    // --- Win canvas setup ---
+    let winCanvas = null; let winCtx = null; let winTimeout = null;
+    function ensureWinCanvas(){
+      if(winCanvas) return;
+      winCanvas = document.createElement('canvas');
+      winCanvas.id = 'winCanvas';
+      // set size to match CSS px (will be resized when drawn)
+      document.body.appendChild(winCanvas);
+      winCtx = winCanvas.getContext('2d');
+      resizeWinCanvas();
+      window.addEventListener('resize', resizeWinCanvas);
+    }
+    function resizeWinCanvas(){
+      if(!winCanvas) return;
+      const rect = winCanvas.getBoundingClientRect();
+      winCanvas.width = Math.max(300, Math.floor(rect.width * window.devicePixelRatio));
+      winCanvas.height = Math.max(120, Math.floor(rect.height * window.devicePixelRatio));
+      // keep CSS size; drawing uses backing store size
+      winCtx && winCtx.setTransform(window.devicePixelRatio,0,0,window.devicePixelRatio,0,0);
+    }
+    function showWinCanvas(){
+      ensureWinCanvas();
+      // draw cute big text
+      const w = winCanvas.width / window.devicePixelRatio;
+      const h = winCanvas.height / window.devicePixelRatio;
+      // clear
+      winCtx.clearRect(0,0,w,h);
+      // background subtle glow (transparent)
+      // text style
+      const fontSize = Math.floor(Math.min(h * 0.6, w * 0.15));
+      winCtx.textAlign = 'center';
+      winCtx.textBaseline = 'middle';
+      winCtx.font = `bold ${fontSize}px "Comic Sans MS", "Comic Neue", "Baloo", sans-serif`;
+      // shadow/glow
+      winCtx.fillStyle = '#fff';
+      winCtx.shadowColor = 'rgba(255, 215, 120, 0.95)';
+      winCtx.shadowBlur = 28;
+      winCtx.fillText('You Win!', w/2, h/2);
+      // outline
+      winCtx.shadowBlur = 0;
+      winCtx.lineWidth = Math.max(4, Math.floor(fontSize * 0.08));
+      winCtx.strokeStyle = '#ff6b6b';
+      winCtx.strokeText('You Win!', w/2, h/2);
+      // auto-hide after 3s
+      if(winTimeout) clearTimeout(winTimeout);
+      winTimeout = setTimeout(hideWinCanvas, 3000);
+    }
+    function hideWinCanvas(){ if(winCanvas){ winCtx.clearRect(0,0,winCanvas.width,winCanvas.height); clearTimeout(winTimeout); winTimeout=null; } }
 
     // Ensure mobile fog button label reflects default state after init
     if(typeof updateFogLabel === 'function' && fogMobile) updateFogLabel();
