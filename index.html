@@ -7,7 +7,13 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="controls">
+  <!-- Tab Navigation -->
+  <div class="tab-bar">
+    <button class="tab-button active" data-game="maze">Maze</button>
+    <button class="tab-button" data-game="cardmatching">CardMatching</button>
+  </div>
+
+  <div class="controls maze-only">
     <div class="content-wrap">
       <button id="closeControls" class="close-btn" aria-label="Close settings">✕</button>
       <h2>Maze Controls</h2>
@@ -30,21 +36,39 @@
   </div>
 
   <div id="main-content">
-    <div class="game">
-      <div id="grid" class="grid" tabindex="0" aria-label="Maze grid"></div>
-      
+    <!-- Maze Game -->
+    <div id="maze-game" class="game-container active">
+      <div class="game">
+        <div id="grid" class="grid" tabindex="0" aria-label="Maze grid"></div>
+      </div>
+    </div>
+
+    <!-- CardMatching Game -->
+    <div id="cardmatching-game" class="game-container">
+      <div class="card-game-header">
+        <h2>Card Matching Game</h2>
+        <div class="tries-counter">Tries: <span id="tries-count">0</span></div>
+      </div>
+      <div class="difficulty-selector">
+        <label>Difficulty:</label>
+        <button class="difficulty-btn active" data-difficulty="easy">Easy</button>
+        <button class="difficulty-btn" data-difficulty="normal">Normal</button>
+      </div>
+      <div class="game">
+        <div id="card-grid" class="card-grid"></div>
+      </div>
     </div>
   </div>
 
   <!-- Topbar / Main menu for mobile: contains a visible Regenerate button moved here for quick access -->
-  <div id="topbar" style="position:fixed;left:12px;top:12px;right:12px;display:none;justify-content:space-between;align-items:center;gap:8px;z-index:60">
+  <div id="topbar" class="maze-only" style="position:fixed;left:12px;top:12px;right:12px;display:none;justify-content:space-between;align-items:center;gap:8px;z-index:60">
     <div style="background:rgba(255,255,255,0.9);padding:6px 10px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,0.06)">
       <button id="regenTop" style="padding:6px 10px;border-radius:8px;border:0;background:#111;color:#fff;">Regenerate Maze</button>
     </div>
   </div>
 
   <!-- Mobile joystick area: will be laid out differently for portrait/landscape/desktop -->
-  <div id="mobileControls" style="z-index:70;display:none;align-items:center;justify-content:center;pointer-events:auto">
+  <div id="mobileControls" class="maze-only" style="z-index:70;display:none;align-items:center;justify-content:center;pointer-events:auto">
     <div id="mobileInner" style="width:100%;max-width:1100px;display:flex;align-items:center;justify-content:center;padding:14px;box-sizing:border-box;position:relative;">
       <!-- left: empty (for now) -->
       <div id="mobileLeft" style="position:absolute;left:14px;"></div>
@@ -75,5 +99,7 @@
     </div>
   </div>
   <script src="script.js"></script>
+  <script src="cardMatching.js"></script>
+  <script src="matchIcons.js"></script>
 </body>
 </html>
