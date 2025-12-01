@@ -202,7 +202,7 @@
       // Check if game is complete
       if (matchedPairs === cardImages.length) {
         setTimeout(() => {
-          alert(`Game Complete! You made ${tries} tries.`);
+          showCompletion();
         }, 500);
       }
     } else {
@@ -215,8 +215,28 @@
     isProcessing = false;
   }
 
+  // Show completion screen
+  function showCompletion() {
+    const completionScreen = document.getElementById('completion-screen');
+    const finalTriesEl = document.getElementById('final-tries');
+    
+    if (completionScreen && finalTriesEl) {
+      finalTriesEl.textContent = tries;
+      completionScreen.classList.add('active');
+    }
+  }
+  
+  // Hide completion screen
+  function hideCompletion() {
+    const completionScreen = document.getElementById('completion-screen');
+    if (completionScreen) {
+      completionScreen.classList.remove('active');
+    }
+  }
+
   // Reset game
   function resetGame() {
+    hideCompletion();
     initGame();
   }
 
@@ -234,6 +254,14 @@
       initGame();
     });
   });
+
+  // Wire up play again button
+  const playAgainBtn = document.getElementById('play-again-btn');
+  if (playAgainBtn) {
+    playAgainBtn.addEventListener('click', () => {
+      resetGame();
+    });
+  }
 
   // Expose reset function for tab switching
   window.resetCardMatchingGame = resetGame;

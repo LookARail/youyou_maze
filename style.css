@@ -197,13 +197,105 @@ body:has(#cardmatching-game.active) .maze-only {
   pointer-events: none;
 }
 
-.card.matched .card-inner {
-  opacity: 0.6;
-}
-
 .card:not(.flipped):hover .card-inner {
   transform: scale(1.05);
   transition: transform 0.2s ease;
+}
+
+/* === Completion Screen === */
+.completion-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  animation: fadeIn 0.3s ease;
+}
+
+.completion-screen.active {
+  display: flex;
+}
+
+.completion-content {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 50px 60px;
+  border-radius: 24px;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: popIn 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.completion-title {
+  font-size: 48px;
+  color: white;
+  margin: 0 0 20px 0;
+  font-family: 'Comic Sans MS', 'Comic Neue', 'Baloo', cursive, sans-serif;
+  text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.3);
+}
+
+.completion-message {
+  font-size: 24px;
+  color: rgba(255, 255, 255, 0.95);
+  margin: 0 0 10px 0;
+  font-weight: 400;
+}
+
+.completion-tries {
+  font-size: 64px;
+  font-weight: 800;
+  color: #ffd700;
+  margin: 20px 0 40px 0;
+  text-shadow: 4px 4px 8px rgba(0, 0, 0, 0.4);
+  font-family: 'Comic Sans MS', 'Comic Neue', 'Baloo', cursive, sans-serif;
+}
+
+.play-again-btn {
+  background: white;
+  color: #667eea;
+  border: none;
+  padding: 16px 48px;
+  font-size: 22px;
+  font-weight: 700;
+  border-radius: 50px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.play-again-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+}
+
+.play-again-btn:active {
+  transform: scale(1.05);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes popIn {
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 /* Responsive adjustments for card game */
